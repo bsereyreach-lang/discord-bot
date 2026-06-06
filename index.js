@@ -4,113 +4,137 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
-// --------------------
-// DATA STORAGE
-// --------------------
+// STORE CLEAN MATCHES
 let messages = [];
-
-// --------------------
-// EXPRESS API
-// --------------------
-app.get("/", (req, res) => {
-    res.send("API WORKING");
-});
-
-app.get("/messages", (req, res) => {
-    res.json({ messages });
-});
-
-// --------------------
-// RAILWAY SAFE PORT
-// --------------------
-const PORT = process.env.PORT || 3000;
-
-app.listen(PORT, "0.0.0.0", () => {
-    console.log("API RUNNING ON PORT", PORT);
-});
 
 // --------------------
 // DISCORD BOT
 // --------------------
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-client.once("clientReady", () => {
-    console.log("BOT ONLINE");
+client.on("ready", () => {
+  console.log("BOT ONLINE");
 });
 
 // --------------------
-// MESSAGE PARSER
+// MESSAGE PARSER (STRICT CLEAN SYSTEM)
 // --------------------
 client.on("messageCreate", (message) => {
+  if (!message) return;
 
-    try {
-        let text = message.content || "";
+  let text = message.content || "";
 
-        // embed support (sports bots)
-        if (!text && message.embeds && message.embeds.length > 0) {
-            const embed = message.embeds[0];
-            text = (embed.title || "") + "\n" + (embed.description || "");
-        }
+  // embed support
+  if (!text && message.embeds?.length > 0) {
+    const embed = message.embeds[0];
+    text = (embed.title || "") + "\n" + (embed.description || "");
+  }
 
-        if (!text) return;
+  if (!text) return;
 
-        // clean junk
-        text = text
-            .replace(/```[\s\S]*?```/g, "")
-            .replace(/\*\*/g, "")
-            .replace(/>/g, "")
-            .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
-            .replace(/\((https?:\/\/.*?)\)/g, "")
-            .replace(/https?:\/\/\S+/g, "")
-            .replace(/Match report[\s\S]*/i, "")
-            .replace(/Click here[\s\S]*/i, "")
-            .trim();
+  // --------------------
+  // CLEAN ALL NOISE
+  // --------------------
+  text = text
+    .replace(/```[\s\S]*?```/g, "")              // code blocks
+    .replace(/\*\*/g, "")                       // bold
+    .replace(/>/g, "")                         // quote
+    .replace(/\((https?:\/\/.*?)\)/g, "")      // (links)
+    .replace(/https?:\/\/\S+/g, "")            // raw links
+    .replace(/Match report[\s\S]*/i, "")       // remove reports
+    .replace(/Click here[\s\S]*/i, "")         // remove junk
+    .replace(/\n{2,}/g, "\n")
+    .trim();
 
-        const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
-        // status
-        let status = "Live";
-        const lower = text.toLowerCase();
+  // --------------------
+  // DEFAULT VALUES
+  // --------------------
+  let status = "Live";
+  let competition = "Unknown";
+  let home = null;
+  let away = null;
+  let homeScore = null;
+  let awayScore = null;
 
-        if (lower.includes("match ended")) status = "Ended";
+  const lower = text.toLowerCase();
 
-        // score detection
-        const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
-        if (!scoreLine) return;
+  // --------------------
+  // STATUS DETECTION
+  // --------------------
+  if (lower.includes("kick")) status = "Live";
+  else if (lower.includes("half time")) status = "Half-time";
+  else if (lower.includes("second half")) status = "Second-half";
+  else if (lower.includes("ended")) status = "Ended";
+  else if (lower.includes("goal")) status = "Goal";
 
-        const match = scoreLine.match(/(.+?)\s+(\d+)\s*-\s*(\d+)\s+(.+)/);
-        if (!match) return;
+  // --------------------
+  // COMPETITION
+  // --------------------
+  competition =
+    lines.find(l => l.toLowerCase().includes("friendlies")) ||
+    "Unknown";
 
-        const data = {
-            status: status,
-            home: match[1].trim(),
-            homeScore: Number(match[2]),
-            awayScore: Number(match[3]),
-            away: match[4].trim()
-        };
+  // --------------------
+  // SCORE PARSER (ONLY IMPORTANT LINE)
+  // --------------------
+  const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
 
-        messages.push(data);
+  if (scoreLine) {
+    const match = scoreLine.match(/(.+?)\s(\d+)\s*-\s*(\d+)\s(.+)/);
 
-        if (messages.length > 50) {
-            messages.shift();
-        }
-
-        console.log("MATCH:", data);
-
-    } catch (err) {
-        console.log("ERROR:", err.message);
+    if (match) {
+      home = match[1].trim();
+      homeScore = Number(match[2]);
+      awayScore = Number(match[3]);
+      away = match[4].trim();
     }
+  }
+
+  // --------------------
+  // IGNORE INVALID MESSAGES
+  // --------------------
+  if (!home || !away || homeScore === null || awayScore === null) return;
+
+  // --------------------
+  // STORE CLEAN DATA
+  // --------------------
+  messages.push({
+    type: "match_update",
+    status,
+    competition,
+    home,
+    away,
+    homeScore,
+    awayScore,
+    raw: text
+  });
+
+  if (messages.length > 50) messages.shift();
+
+  console.log("MATCH:", status, home, homeScore, "-", awayScore, away);
 });
 
 // --------------------
-// DISCORD LOGIN (SAFE)
+// API FOR ROBLOX
 // --------------------
-client.login(process.env.TOKEN)
-    .then(() => console.log("BOT LOGIN SENT"))
-    .catch(err => console.log("LOGIN ERROR:", err.message));
+app.get("/messages", (req, res) => {
+  res.json({ messages });
+});
+
+// --------------------
+// START SERVER
+// --------------------
+app.listen(3000, () => {
+  console.log("API RUNNING");
+});
+
+// LOGIN BOT
+client.login(process.env.TOKEN);
