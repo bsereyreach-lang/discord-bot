@@ -5,7 +5,7 @@ const app = express();
 app.use(express.json());
 
 // --------------------
-// STORAGE
+// STORE MATCHES
 // --------------------
 let messages = [];
 
@@ -25,13 +25,13 @@ client.once("clientReady", () => {
 });
 
 // --------------------
-// MESSAGE HANDLER
+// MESSAGE PARSER
 // --------------------
 client.on("messageCreate", (message) => {
 
     let text = message.content || "";
 
-    // embed support (sports bots)
+    // embed support
     if (!text && message.embeds?.length > 0) {
         const embed = message.embeds[0];
         text = `${embed.title || ""}\n${embed.description || ""}`;
@@ -39,37 +39,27 @@ client.on("messageCreate", (message) => {
 
     if (!text) return;
 
-    // --------------------
-    // CLEAN TEXT (REMOVE JUNK)
-    // --------------------
+    // CLEAN TEXT
     text = text
         .replace(/```[\s\S]*?```/g, "")
         .replace(/\*\*/g, "")
         .replace(/>/g, "")
-        .replace(/\[(.*?)\]\((.*?)\)/g, "$1") // [text](link)
-        .replace(/\((https?:\/\/.*?)\)/g, "") // (link)
+        .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+        .replace(/\((https?:\/\/.*?)\)/g, "")
         .replace(/https?:\/\/\S+/g, "")
         .replace(/Match report[\s\S]*/i, "")
         .replace(/Click here[\s\S]*/i, "")
-        .replace(/\n{2,}/g, "\n")
         .trim();
 
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
-    // --------------------
     // STATUS
-    // --------------------
     let status = "Live";
     const lower = text.toLowerCase();
 
     if (lower.includes("match ended")) status = "Ended";
-    else if (lower.includes("kick")) status = "Live";
-    else if (lower.includes("half")) status = "Live";
-    else if (lower.includes("goal")) status = "Live";
 
-    // --------------------
     // FIND SCORE
-    // --------------------
     const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
 
     if (!scoreLine) return;
@@ -99,10 +89,10 @@ client.on("messageCreate", (message) => {
 });
 
 // --------------------
-// EXPRESS API
+// API ROUTES
 // --------------------
 app.get("/", (req, res) => {
-    res.send("API WORKING");
+    res.status(200).send("API WORKING");
 });
 
 app.get("/messages", (req, res) => {
@@ -110,9 +100,9 @@ app.get("/messages", (req, res) => {
 });
 
 // --------------------
-// RAILWAY SAFE PORT FIX
+// IMPORTANT RAILWAY FIX (THIS IS WHAT YOU WERE MISSING)
 // --------------------
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT;
 
 app.listen(PORT, "0.0.0.0", () => {
     console.log("API RUNNING ON PORT", PORT);
