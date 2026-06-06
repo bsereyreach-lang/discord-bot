@@ -9,13 +9,12 @@ const client = new Client({
 });
 
 client.on("ready", () => {
-  console.log("Bot is ONLINE");
+  console.log("BOT ONLINE");
 });
 
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
-
-  console.log("Message:", message.content);
+  console.log(message.content);
 });
 
 client.login(process.env.TOKEN);
