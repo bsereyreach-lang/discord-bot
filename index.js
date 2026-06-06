@@ -17,41 +17,79 @@ client.once("ready", () => {
     console.log("BOT ONLINE");
 });
 
+// --------------------
+// MESSAGE LISTENER (DEBUG + CLEAN)
+// --------------------
 client.on("messageCreate", (message) => {
+
+    // 🔴 DEBUG: show EVERYTHING received
+    console.log("----- NEW MESSAGE -----");
+    console.log("CONTENT:", message.content);
+
+    if (message.embeds?.length > 0) {
+        console.log("EMBED:", JSON.stringify(message.embeds[0], null, 2));
+    }
+
     let text = message.content || "";
 
-    // Read embeds from sports bots
-    if (!text && message.embeds && message.embeds.length > 0) {
+    // embed support (sports bots)
+    if (!text && message.embeds?.length > 0) {
         const embed = message.embeds[0];
-
-        text = [
-            embed.title || "",
-            embed.description || ""
-        ].join("\n");
+        text = `${embed.title || ""}\n${embed.description || ""}`;
     }
 
     if (!text) return;
 
-    // Convert [Brazil 2 - 0 Egypt](url)
-    // into Brazil 2 - 0 Egypt
-    text = text.replace(/\[(.*?)\]\((.*?)\)/g, "$1");
+    // --------------------
+    // CLEAN TEXT (REMOVE NOISE)
+    // --------------------
+    text = text
+        .replace(/```[\s\S]*?```/g, "")
+        .replace(/\*\*/g, "")
+        .replace(/>/g, "")
+        .replace(/\[(.*?)\]\((.*?)\)/g, "$1") // [text](link)
+        .replace(/\((https?:\/\/.*?)\)/g, "") // (link)
+        .replace(/https?:\/\/\S+/g, "") // raw links
+        .replace(/Match report[\s\S]*/i, "")
+        .replace(/Click here[\s\S]*/i, "")
+        .replace(/\n{2,}/g, "\n")
+        .trim();
 
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+
+    // --------------------
+    // STATUS DETECTION
+    // --------------------
     let status = "Live";
 
-    if (text.toLowerCase().includes("match ended")) {
-        status = "Ended";
-    }
+    const lower = text.toLowerCase();
 
-    const scoreMatch = text.match(/(.+?)\s+(\d+)\s*-\s*(\d+)\s+(.+)/);
+    if (lower.includes("kick")) status = "Live";
+    if (lower.includes("half time")) status = "Live";
+    if (lower.includes("second half")) status = "Live";
+    if (lower.includes("goal")) status = "Live";
+    if (lower.includes("match ended")) status = "Ended";
 
-    if (!scoreMatch) return;
+    // --------------------
+    // FIND SCORE LINE
+    // --------------------
+    const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
 
-    const home = scoreMatch[1].trim();
-    const homeScore = parseInt(scoreMatch[2]);
-    const awayScore = parseInt(scoreMatch[3]);
-    const away = scoreMatch[4].trim();
+    if (!scoreLine) return;
 
-    const matchData = {
+    const match = scoreLine.match(/(.+?)\s+(\d+)\s*-\s*(\d+)\s+(.+)/);
+
+    if (!match) return;
+
+    const home = match[1].trim();
+    const homeScore = Number(match[2]);
+    const awayScore = Number(match[3]);
+    const away = match[4].trim();
+
+    // --------------------
+    // SAVE CLEAN DATA
+    // --------------------
+    const data = {
         status,
         home,
         away,
@@ -59,29 +97,30 @@ client.on("messageCreate", (message) => {
         awayScore
     };
 
-    messages.push(matchData);
+    messages.push(data);
 
-    if (messages.length > 50) {
-        messages.shift();
-    }
+    if (messages.length > 50) messages.shift();
 
-    console.log("MATCH:", matchData);
+    console.log("MATCH SAVED:", data);
 });
 
+// --------------------
+// API FOR ROBLOX
+// --------------------
 app.get("/", (req, res) => {
     res.send("API RUNNING");
 });
 
 app.get("/messages", (req, res) => {
-    res.json({
-        messages
-    });
+    res.json({ messages });
 });
 
+// --------------------
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log("API RUNNING");
+    console.log("API RUNNING ON PORT", PORT);
 });
 
+// BOT LOGIN
 client.login(process.env.TOKEN);
