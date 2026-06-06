@@ -4,8 +4,8 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
-// STORE LAST MESSAGE
-let latestMessage = "";
+// STORE MANY MESSAGES
+let messages = [];
 
 // DISCORD BOT
 const client = new Client({
@@ -20,17 +20,27 @@ client.on("ready", () => {
   console.log("BOT ONLINE");
 });
 
-// READ DISCORD MESSAGE
+// SAVE MESSAGES
 client.on("messageCreate", (message) => {
   if (message.author.bot) return;
 
-  latestMessage = message.content;
-  console.log("Discord:", latestMessage);
+  messages.push({
+    content: message.content,
+    user: message.author.username,
+    time: Date.now()
+  });
+
+  // limit memory (important)
+  if (messages.length > 50) {
+    messages.shift();
+  }
+
+  console.log(message.author.username + ":", message.content);
 });
 
-// API FOR ROBLOX
-app.get("/message", (req, res) => {
-  res.json({ message: latestMessage });
+// ROBLOX API (GET ALL MESSAGES)
+app.get("/messages", (req, res) => {
+  res.json({ messages });
 });
 
 // START SERVER
@@ -38,5 +48,5 @@ app.listen(3000, () => {
   console.log("API RUNNING");
 });
 
-// LOGIN BOT
+// LOGIN
 client.login(process.env.TOKEN);
