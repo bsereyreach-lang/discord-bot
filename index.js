@@ -4,7 +4,7 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
-// STORE MATCHES
+// STORE DATA
 let messages = [];
 
 // --------------------
@@ -23,12 +23,22 @@ client.on("ready", () => {
 });
 
 // --------------------
-// PARSE ALL MATCH TYPES
+// MESSAGE HANDLER (BOTS + WEBHOOKS + EMBEDS)
 // --------------------
 client.on("messageCreate", (message) => {
-  if (message.author.bot) return;
+  if (!message) return;
 
-  const text = message.content;
+  // allow everything (bots + webhooks + users)
+  let text = message.content || "";
+
+  // embed support (IMPORTANT FOR SPORTS BOTS)
+  if (!text && message.embeds && message.embeds.length > 0) {
+    const embed = message.embeds[0];
+    text = (embed.title || "") + "\n" + (embed.description || "");
+  }
+
+  if (!text) return;
+
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
   let status = "Unknown";
@@ -42,18 +52,27 @@ client.on("messageCreate", (message) => {
 
   const lower = text.toLowerCase();
 
+  // --------------------
   // STATUS DETECTION
-  if (lower.includes("kick-off")) status = "Kick-off";
-  else if (lower.includes("half time")) status = "Half-time";
+  // --------------------
+  if (lower.includes("kick")) status = "Kick-off";
+  else if (lower.includes("half")) status = "Half-time";
   else if (lower.includes("second half")) status = "Second-half";
-  else if (lower.includes("match ended")) status = "Ended";
+  else if (lower.includes("ended")) status = "Ended";
   else if (lower.includes("goal")) status = "Goal";
   else status = "Live";
 
+  // --------------------
   // COMPETITION
-  competition = lines.find(l => l.toLowerCase().includes("friendlies")) || "Unknown";
+  // --------------------
+  competition =
+    lines.find(l => l.toLowerCase().includes("friendlies")) ||
+    lines[1] ||
+    "Unknown";
 
+  // --------------------
   // SCORE PARSER
+  // --------------------
   const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
 
   if (scoreLine) {
@@ -67,17 +86,19 @@ client.on("messageCreate", (message) => {
     }
   }
 
+  // --------------------
   // GOAL PARSER
+  // --------------------
   if (lower.includes("goal")) {
     eventText = text;
 
     const minuteMatch = text.match(/(\d+)'/);
-    if (minuteMatch) {
-      minute = parseInt(minuteMatch[1]);
-    }
+    if (minuteMatch) minute = parseInt(minuteMatch[1]);
   }
 
+  // --------------------
   // STORE CLEAN DATA
+  // --------------------
   messages.push({
     type: "match_update",
     status,
@@ -97,7 +118,7 @@ client.on("messageCreate", (message) => {
 });
 
 // --------------------
-// API FOR ROBLOX
+// ROBLOX API
 // --------------------
 app.get("/messages", (req, res) => {
   res.json({ messages });
