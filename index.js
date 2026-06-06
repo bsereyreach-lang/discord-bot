@@ -23,24 +23,38 @@ client.on("ready", () => {
 });
 
 // --------------------
-// MESSAGE HANDLER (BOTS + WEBHOOKS + EMBEDS)
+// MESSAGE HANDLER (CLEAN + SAFE)
 // --------------------
 client.on("messageCreate", (message) => {
   if (!message) return;
 
-  // allow everything (bots + webhooks + users)
+  // RAW TEXT OR EMBED TEXT
   let text = message.content || "";
 
-  // embed support (IMPORTANT FOR SPORTS BOTS)
-  if (!text && message.embeds && message.embeds.length > 0) {
+  if (!text && message.embeds?.length > 0) {
     const embed = message.embeds[0];
     text = (embed.title || "") + "\n" + (embed.description || "");
   }
 
   if (!text) return;
 
+  // --------------------
+  // CLEAN DISCORD FORMAT
+  // --------------------
+  text = text
+    .replace(/```[\s\S]*?```/g, "")        // code blocks
+    .replace(/\*\*/g, "")                 // bold **
+    .replace(/>/g, "")                   // quote >
+    .replace(/\[(.*?)\]\(.*?\)/g, "$1")   // links
+    .replace(/https?:\/\/\S+/g, "")       // raw URLs
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+
   const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
+  // --------------------
+  // DEFAULT VALUES
+  // --------------------
   let status = "Unknown";
   let competition = null;
   let home = null;
@@ -67,7 +81,6 @@ client.on("messageCreate", (message) => {
   // --------------------
   competition =
     lines.find(l => l.toLowerCase().includes("friendlies")) ||
-    lines[1] ||
     "Unknown";
 
   // --------------------
@@ -87,7 +100,7 @@ client.on("messageCreate", (message) => {
   }
 
   // --------------------
-  // GOAL PARSER
+  // GOAL EVENT
   // --------------------
   if (lower.includes("goal")) {
     eventText = text;
@@ -118,7 +131,7 @@ client.on("messageCreate", (message) => {
 });
 
 // --------------------
-// ROBLOX API
+// API FOR ROBLOX
 // --------------------
 app.get("/messages", (req, res) => {
   res.json({ messages });
