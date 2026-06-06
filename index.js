@@ -4,7 +4,7 @@ const express = require("express");
 const app = express();
 app.use(express.json());
 
-// STORE DATA
+// STORE CLEAN MATCHES
 let messages = [];
 
 // --------------------
@@ -23,14 +23,14 @@ client.on("ready", () => {
 });
 
 // --------------------
-// MESSAGE HANDLER (CLEAN + SAFE)
+// MESSAGE PARSER (STRICT CLEAN SYSTEM)
 // --------------------
 client.on("messageCreate", (message) => {
   if (!message) return;
 
-  // RAW TEXT OR EMBED TEXT
   let text = message.content || "";
 
+  // embed support
   if (!text && message.embeds?.length > 0) {
     const embed = message.embeds[0];
     text = (embed.title || "") + "\n" + (embed.description || "");
@@ -39,14 +39,16 @@ client.on("messageCreate", (message) => {
   if (!text) return;
 
   // --------------------
-  // CLEAN DISCORD FORMAT
+  // CLEAN ALL NOISE
   // --------------------
   text = text
-    .replace(/```[\s\S]*?```/g, "")        // code blocks
-    .replace(/\*\*/g, "")                 // bold **
-    .replace(/>/g, "")                   // quote >
-    .replace(/\[(.*?)\]\(.*?\)/g, "$1")   // links
-    .replace(/https?:\/\/\S+/g, "")       // raw URLs
+    .replace(/```[\s\S]*?```/g, "")              // code blocks
+    .replace(/\*\*/g, "")                       // bold
+    .replace(/>/g, "")                         // quote
+    .replace(/\((https?:\/\/.*?)\)/g, "")      // (links)
+    .replace(/https?:\/\/\S+/g, "")            // raw links
+    .replace(/Match report[\s\S]*/i, "")       // remove reports
+    .replace(/Click here[\s\S]*/i, "")         // remove junk
     .replace(/\n{2,}/g, "\n")
     .trim();
 
@@ -55,14 +57,12 @@ client.on("messageCreate", (message) => {
   // --------------------
   // DEFAULT VALUES
   // --------------------
-  let status = "Unknown";
-  let competition = null;
+  let status = "Live";
+  let competition = "Unknown";
   let home = null;
   let away = null;
   let homeScore = null;
   let awayScore = null;
-  let eventText = null;
-  let minute = null;
 
   const lower = text.toLowerCase();
 
@@ -70,11 +70,10 @@ client.on("messageCreate", (message) => {
   // STATUS DETECTION
   // --------------------
   if (lower.includes("kick")) status = "Kick-off";
-  else if (lower.includes("half")) status = "Half-time";
+  else if (lower.includes("half time")) status = "Half-time";
   else if (lower.includes("second half")) status = "Second-half";
   else if (lower.includes("ended")) status = "Ended";
   else if (lower.includes("goal")) status = "Goal";
-  else status = "Live";
 
   // --------------------
   // COMPETITION
@@ -84,7 +83,7 @@ client.on("messageCreate", (message) => {
     "Unknown";
 
   // --------------------
-  // SCORE PARSER
+  // SCORE PARSER (ONLY IMPORTANT LINE)
   // --------------------
   const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
 
@@ -93,21 +92,16 @@ client.on("messageCreate", (message) => {
 
     if (match) {
       home = match[1].trim();
-      homeScore = parseInt(match[2]);
-      awayScore = parseInt(match[3]);
+      homeScore = Number(match[2]);
+      awayScore = Number(match[3]);
       away = match[4].trim();
     }
   }
 
   // --------------------
-  // GOAL EVENT
+  // IGNORE INVALID MESSAGES
   // --------------------
-  if (lower.includes("goal")) {
-    eventText = text;
-
-    const minuteMatch = text.match(/(\d+)'/);
-    if (minuteMatch) minute = parseInt(minuteMatch[1]);
-  }
+  if (!home || !away || homeScore === null || awayScore === null) return;
 
   // --------------------
   // STORE CLEAN DATA
@@ -120,8 +114,6 @@ client.on("messageCreate", (message) => {
     away,
     homeScore,
     awayScore,
-    eventText,
-    minute,
     raw: text
   });
 
@@ -137,7 +129,9 @@ app.get("/messages", (req, res) => {
   res.json({ messages });
 });
 
+// --------------------
 // START SERVER
+// --------------------
 app.listen(3000, () => {
   console.log("API RUNNING");
 });
