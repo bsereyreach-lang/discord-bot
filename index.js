@@ -2,9 +2,16 @@ const { Client, GatewayIntentBits } = require("discord.js");
 const express = require("express");
 
 const app = express();
+app.use(express.json());
 
+// --------------------
+// STORAGE
+// --------------------
 let messages = [];
 
+// --------------------
+// DISCORD BOT
+// --------------------
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -13,22 +20,14 @@ const client = new Client({
     ]
 });
 
-client.once("ready", () => {
+client.once("clientReady", () => {
     console.log("BOT ONLINE");
 });
 
 // --------------------
-// MESSAGE LISTENER (DEBUG + CLEAN)
+// MESSAGE HANDLER
 // --------------------
 client.on("messageCreate", (message) => {
-
-    // 🔴 DEBUG: show EVERYTHING received
-    console.log("----- NEW MESSAGE -----");
-    console.log("CONTENT:", message.content);
-
-    if (message.embeds?.length > 0) {
-        console.log("EMBED:", JSON.stringify(message.embeds[0], null, 2));
-    }
 
     let text = message.content || "";
 
@@ -41,7 +40,7 @@ client.on("messageCreate", (message) => {
     if (!text) return;
 
     // --------------------
-    // CLEAN TEXT (REMOVE NOISE)
+    // CLEAN TEXT (REMOVE JUNK)
     // --------------------
     text = text
         .replace(/```[\s\S]*?```/g, "")
@@ -49,7 +48,7 @@ client.on("messageCreate", (message) => {
         .replace(/>/g, "")
         .replace(/\[(.*?)\]\((.*?)\)/g, "$1") // [text](link)
         .replace(/\((https?:\/\/.*?)\)/g, "") // (link)
-        .replace(/https?:\/\/\S+/g, "") // raw links
+        .replace(/https?:\/\/\S+/g, "")
         .replace(/Match report[\s\S]*/i, "")
         .replace(/Click here[\s\S]*/i, "")
         .replace(/\n{2,}/g, "\n")
@@ -58,20 +57,18 @@ client.on("messageCreate", (message) => {
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
 
     // --------------------
-    // STATUS DETECTION
+    // STATUS
     // --------------------
     let status = "Live";
-
     const lower = text.toLowerCase();
 
-    if (lower.includes("kick")) status = "Live";
-    if (lower.includes("half time")) status = "Live";
-    if (lower.includes("second half")) status = "Live";
-    if (lower.includes("goal")) status = "Live";
     if (lower.includes("match ended")) status = "Ended";
+    else if (lower.includes("kick")) status = "Live";
+    else if (lower.includes("half")) status = "Live";
+    else if (lower.includes("goal")) status = "Live";
 
     // --------------------
-    // FIND SCORE LINE
+    // FIND SCORE
     // --------------------
     const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
 
@@ -86,9 +83,6 @@ client.on("messageCreate", (message) => {
     const awayScore = Number(match[3]);
     const away = match[4].trim();
 
-    // --------------------
-    // SAVE CLEAN DATA
-    // --------------------
     const data = {
         status,
         home,
@@ -101,14 +95,14 @@ client.on("messageCreate", (message) => {
 
     if (messages.length > 50) messages.shift();
 
-    console.log("MATCH SAVED:", data);
+    console.log("MATCH:", data);
 });
 
 // --------------------
-// API FOR ROBLOX
+// EXPRESS API
 // --------------------
 app.get("/", (req, res) => {
-    res.send("API RUNNING");
+    res.send("API WORKING");
 });
 
 app.get("/messages", (req, res) => {
@@ -116,11 +110,15 @@ app.get("/messages", (req, res) => {
 });
 
 // --------------------
+// RAILWAY SAFE PORT FIX
+// --------------------
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
     console.log("API RUNNING ON PORT", PORT);
 });
 
-// BOT LOGIN
+// --------------------
+// LOGIN BOT
+// --------------------
 client.login(process.env.TOKEN);
