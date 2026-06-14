@@ -69,10 +69,10 @@ client.on("messageCreate", (message) => {
   // --------------------
   // STATUS DETECTION
   // --------------------
-  if (lower.includes("kick off")) status = "Live";
+  if (lower.includes("kick")) status = "Live";
   else if (lower.includes("half-time")) status = "Half-time";
   else if (lower.includes("second-half")) status = "Second-half";
-  else if (lower.includes("full-time!")) status = "Ended";
+  else if (lower.includes("full-time")) status = "Ended";
   else if (lower.includes("goal")) status = "Goal";
 
   // --------------------
