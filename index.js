@@ -2,11 +2,14 @@ const { Client, GatewayIntentBits } = require("discord.js");
 const express = require("express");
 
 const app = express();
-
-let messages = [];
-
 app.use(express.json());
 
+// STORE CLEAN MATCHES
+let messages = [];
+
+// --------------------
+// DISCORD BOT
+// --------------------
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -15,98 +18,123 @@ const client = new Client({
   ]
 });
 
-client.once("ready", () => {
-  console.log(`BOT ONLINE: ${client.user.tag}`);
+client.on("clientReady", () => {
+  console.log("BOT ONLINE");
 });
 
+// --------------------
+// MESSAGE PARSER (STRICT CLEAN SYSTEM)
+// --------------------
 client.on("messageCreate", (message) => {
-  try {
-    let text = message.content || "";
+  if (!message) return;
 
-    if (message.embeds.length > 0) {
-      const embed = message.embeds[0];
+  let text = message.content || "";
 
-      text += "\n" + (embed.title || "");
-      text += "\n" + (embed.description || "");
-
-      if (embed.fields) {
-        for (const field of embed.fields) {
-          text += "\n" + field.name;
-          text += "\n" + field.value;
-        }
-      }
-    }
-
-    if (!text.trim()) return;
-
-    const lower = text.toLowerCase();
-
-    let status = "Live";
-
-    if (
-      lower.includes("full-time") ||
-      lower.includes("full time") ||
-      lower.includes("match ended")
-    ) {
-      status = "Ended";
-    } else if (
-      lower.includes("goal") ||
-      lower.includes("goaaaa") ||
-      lower.includes("net rippled")
-    ) {
-      status = "Goal";
-    } else if (
-      lower.includes("half-time") ||
-      lower.includes("half time")
-    ) {
-      status = "Half-time";
-    }
-
-    const scoreMatch = text.match(
-      /(.+?)\s+(\d+)\s*-\s*(\d+)\s+(.+)/
-    );
-
-    if (!scoreMatch) return;
-
-    const data = {
-      status,
-      home: scoreMatch[1].trim(),
-      homeScore: Number(scoreMatch[2]),
-      awayScore: Number(scoreMatch[3]),
-      away: scoreMatch[4].trim(),
-      timestamp: Date.now()
-    };
-
-    messages = [data];
-
-    console.log(data);
-
-  } catch (err) {
-    console.error(err);
+  // embed support
+  if (!text && message.embeds?.length > 0) {
+    const embed = message.embeds[0];
+    text = (embed.title || "") + "\n" + (embed.description || "");
   }
+
+  if (!text) return;
+
+  // --------------------
+  // CLEAN ALL NOISE
+  // --------------------
+  text = text
+    .replace(/```[\s\S]*?```/g, "")              // code blocks
+    .replace(/\*\*/g, "")                       // bold
+    .replace(/>/g, "")                         // quote
+    .replace(/\((https?:\/\/.*?)\)/g, "")      // (links)
+    .replace(/https?:\/\/\S+/g, "")            // raw links
+    .replace(/Match report[\s\S]*/i, "")       // remove reports
+    .replace(/Click here[\s\S]*/i, "")         // remove junk
+    .replace(/\n{2,}/g, "\n")
+    .trim();
+
+  const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+
+  // --------------------
+  // DEFAULT VALUES
+  // --------------------
+  let status = "Live";
+  let competition = "Unknown";
+  let home = null;
+  let away = null;
+  let homeScore = null;
+  let awayScore = null;
+
+  const lower = text.toLowerCase();
+
+  // --------------------
+  // STATUS DETECTION
+  // --------------------
+  if (lower.includes("kick")) status = "Live";
+  else if (lower.includes("half time")) status = "Half-time";
+  else if (lower.includes("second half")) status = "Second-half";
+  else if (lower.includes("full time")) status = "Ended";
+  else if (lower.includes("goal")) status = "Goal";
+
+  // --------------------
+  // COMPETITION
+  // --------------------
+  competition =
+    lines.find(l => l.toLowerCase().includes("friendlies")) ||
+    "Unknown";
+
+  // --------------------
+  // SCORE PARSER (ONLY IMPORTANT LINE)
+  // --------------------
+  const scoreLine = lines.find(l => /\d+\s*-\s*\d+/.test(l));
+
+  if (scoreLine) {
+    const match = scoreLine.match(/(.+?)\s(\d+)\s*-\s*(\d+)\s(.+)/);
+
+    if (match) {
+      home = match[1].trim();
+      homeScore = Number(match[2]);
+      awayScore = Number(match[3]);
+      away = match[4].trim();
+    }
+  }
+
+  // --------------------
+  // IGNORE INVALID MESSAGES
+  // --------------------
+  if (!home || !away || homeScore === null || awayScore === null) return;
+
+  // --------------------
+  // STORE CLEAN DATA
+  // --------------------
+  messages.push({
+    type: "match_update",
+    status,
+    competition,
+    home,
+    away,
+    homeScore,
+    awayScore,
+    raw: text
+  });
+
+  if (messages.length > 50) messages.shift();
+
+  console.log("MATCH:", status, home, homeScore, "-", awayScore, away);
 });
 
-app.get("/", (req, res) => {
-  res.send("Football API Running");
-});
-
-app.get("/latest", (req, res) => {
-  res.json(messages[0] || {});
-});
-
+// --------------------
+// API FOR ROBLOX
+// --------------------
 app.get("/messages", (req, res) => {
-  res.json(messages);
+  res.json({ messages });
 });
 
-app.get("/clear", (req, res) => {
-  messages = [];
-  res.json({ success: true });
+// --------------------
+// START SERVER
+// --------------------
+app.listen(3000, () => {
+  console.log("API RUNNING");
 });
 
-const PORT = process.env.PORT || 8080;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`API RUNNING ON ${PORT}`);
-});
-
+// LOGIN BOT
 client.login(process.env.TOKEN);
