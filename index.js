@@ -69,17 +69,17 @@ client.on("messageCreate", (message) => {
   // --------------------
   // STATUS DETECTION
   // --------------------
-  if (lower.includes("kick")) status = "Live";
-  else if (lower.includes("half time")) status = "Half-time";
-  else if (lower.includes("second half")) status = "Second-half";
-  else if (lower.includes("full time")) status = "Ended";
+  if (lower.includes("kick off")) status = "Live";
+  else if (lower.includes("half-time")) status = "Half-time";
+  else if (lower.includes("second-half")) status = "Second-half";
+  else if (lower.includes("full-time!")) status = "Ended";
   else if (lower.includes("goal")) status = "Goal";
 
   // --------------------
   // COMPETITION
   // --------------------
   competition =
-    lines.find(l => l.toLowerCase().includes("friendlies")) ||
+    lines.find(l => l.toLowerCase().includes("world cup")) ||
     "Unknown";
 
   // --------------------
